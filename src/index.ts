@@ -5,12 +5,13 @@ import GameScene from './scenes/GameScene'
 const config: Phaser.Types.Core.GameConfig = {
 	type: Phaser.AUTO,
 	width: 308,
-	height: 368,
+	height: 352,
     backgroundColor: '#7d7d7d',
 	physics: {
 		default: 'arcade',
 		arcade: {
-			gravity: { y: 200 }
+			gravity: { y: 0 },
+			debug: true
 		}
 	},
 	zoom: 2,
