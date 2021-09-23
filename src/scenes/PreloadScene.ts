@@ -18,11 +18,16 @@ export default class PreloadScene extends Phaser.Scene {
         });
         
         this.load.tilemapTiledJSON('pacmanJson', 'assets/tilemap/pac-man.json');
+
+        this.load.audioSprite('sfx', 'assets/sounds/pacman_regular.json', 'assets/sounds/pacman_regular.mp3');
+        this.load.audioSprite('bgm', 'assets/sounds/pacman_looped.json', 'assets/sounds/pacman_looped.mp3');
     }
 
     create()
     {
+        
         this.scene.start('GameScene');
+    
     }
 
     update() {

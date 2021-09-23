@@ -7,6 +7,9 @@ interface IGhost {
     readonly physicsBody: Phaser.Physics.Arcade.Body;
     readonly ghostColor?: Colors;
     readonly lastOptimismPos?: IPosition;
+    readonly isFrightened?: Boolean;
+    readonly isFrozen?: Boolean;
+    readonly isAte?: Boolean;
     
     setDebugTargetPosition(x: number, y: number): void;
     setAI(ai: IGhostAI): IGhost;
@@ -16,6 +19,8 @@ interface IGhost {
     look(direction: Directions): IGhost;
 
     preUpdate(t: number, dt: number): void;
+
+    outRoom(): void;
 };
 
 export{

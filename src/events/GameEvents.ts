@@ -1,0 +1,14 @@
+const sceneEvents = new Phaser.Events.EventEmitter();
+
+const EVENT_GAME_INITED = Symbol('EVENT_GAME_INITED');
+const EVENT_PACMAN_HASPOWER = Symbol('EVENT_PACMAN_HASPOWER');
+const EVENT_PACMAN_LOSEPOWER = Symbol('EVENT_PACMAN_LOSEPOWER');
+const EVENT_GHOST_ATE = Symbol('EVENT_GHOST_ATE');
+
+export {
+    sceneEvents,
+    EVENT_GAME_INITED,
+    EVENT_PACMAN_HASPOWER,
+    EVENT_PACMAN_LOSEPOWER,
+    EVENT_GHOST_ATE
+}

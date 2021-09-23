@@ -1,4 +1,4 @@
-import GameConfig from "../configs/GameConfig";
+import { GameConfig } from "../configs/GameConfig";
 import { Directions } from "../enums/GameEnums"
 import IPosition from "./IPosition";
 
@@ -7,6 +7,7 @@ interface IGhostAI {
     readonly targetPosition: IPosition;
 
     pickDirection(): Directions;
+    changeSpeed(speed: number): void;
 };
 
 const getOrderedDirections = (filter?: (dir: Directions) => boolean) => {

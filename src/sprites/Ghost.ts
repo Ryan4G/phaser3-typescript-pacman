@@ -1,21 +1,27 @@
 import Phaser from "phaser";
-import GameConfig from "../configs/GameConfig";
+import { GameConfig } from "../configs/GameConfig";
 import IPosition from "../interfaces/IPosition";
 import { Colors, Directions } from "../enums/GameEnums";
 import { IGhost } from "../interfaces/IGhost";
-import { IGhostAI } from "../interfaces/IGhostAI";
+import { getOppositeDirection, IGhostAI } from "../interfaces/IGhostAI";
+import FrightenedAI from "../ai-mode/FrightenedAI";
+import ScatterAI from "../ai-mode/ScatterAI";
+import { EVENT_GHOST_ATE, EVENT_PACMAN_HASPOWER, sceneEvents } from "../events/GameEvents";
 
 export default class Ghost extends Phaser.GameObjects.Container implements IGhost{
     
     private _currentDirection: Directions = Directions.Left;
 
     private _ghostBody: Phaser.GameObjects.Sprite;
+    private _ghostEyes: Phaser.GameObjects.Image;
     private _ghostPupils: Phaser.GameObjects.Image;
     private _aimode?: IGhostAI;
     private _ghostColor?: Colors;
     private _targetPosShow?: Phaser.GameObjects.Rectangle;
     private _lastOptimismPos?: IPosition;
     private _wallLayer?: Phaser.Tilemaps.TilemapLayer;
+    private _isAte?: boolean = false;
+    private _isFrozen?: boolean = true;
 
     constructor(scene: Phaser.Scene, x?: number, y?: number, children?: Phaser.GameObjects.GameObject[],
         wallLayer?: Phaser.Tilemaps.TilemapLayer){
@@ -31,11 +37,11 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
 
         //(this._ghostBody.body as Phaser.Physics.Arcade.Body).setCircle(8);
 
-        const ghostEyes = scene.add.image(8, 8, 'pacman', 8);
+        this._ghostEyes = scene.add.image(8, 8, 'pacman', 8);
         this._ghostPupils = scene.add.image(8, 8, 'pacman', 9);
 
         this.add(this._ghostBody);
-        this.add(ghostEyes);
+        this.add(this._ghostEyes);
         this.add(this._ghostPupils);
 
         this.look(Directions.Idle);
@@ -45,6 +51,8 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
         this.physicsBody.setCircle(8);
 
         this._targetPosShow = scene.add.rectangle(0, 0, 5, 5, this.ghostColor ? this.ghostColor : 0xff0000);
+
+        this.enableDebugTargetPosition(false);
     }
     
     get currentDirection(){
@@ -61,6 +69,18 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
 
     get lastOptimismPos(){
         return this._lastOptimismPos;
+    }
+
+    get isFrightened(){
+        return this._aimode instanceof FrightenedAI;
+    }
+
+    get isAte(){
+        return this._isAte;
+    }
+
+    get isFrozen(){
+        return this._isFrozen;
     }
 
     setDebugTargetPosition(x: number, y: number){
@@ -83,8 +103,32 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
         }
     }
 
+    enableDebugTargetPosition(val: boolean){
+        if (this._targetPosShow){
+            this._targetPosShow.setVisible(val);
+        }
+    }
+
     setAI(ai: IGhostAI){
+
+        if (this._aimode && ai !== this._aimode){
+            this._currentDirection = getOppositeDirection(this._currentDirection);
+        }
+
         this._aimode = ai;
+
+        if (this._aimode instanceof FrightenedAI){
+            this._ghostBody.clearTint();
+            this._ghostEyes.setVisible(false);
+            this._ghostPupils.setVisible(false);
+            this._ghostBody.play('ghost-frightened');
+        }
+        else{
+            this.makeColor(this._ghostColor!);
+            this._ghostEyes.setVisible(true);
+            this._ghostPupils.setVisible(true);
+            this._ghostBody.play('ghost-move');
+        }
 
         return this;
     }
@@ -97,6 +141,10 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
         switch(color){
             case Colors.Blinky:{
                 this._ghostBody.setTint(0xff0000);
+                // blinky borned out of the ghost room
+                if (this._isFrozen){
+                    this._isFrozen = false;
+                }
                 break;
             }
             case Colors.Clyde:{
@@ -151,7 +199,7 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
     preUpdate(t: number, dt: number){
         const containerBody = this.physicsBody;
 
-        if (!containerBody || !this._aimode){
+        if (!containerBody || !this._aimode || this._isFrozen){
             return;
         }
 
@@ -165,12 +213,10 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
             y: (Math.floor(pos.y / GameConfig.TileHeight) + 0.5) * GameConfig.TileHeight
         };
 
-        if(containerBody.position.x < 0){
-            this.setPosition(this._wallLayer!.width, this.y);
-        }
+        this.scene.physics.world.wrapObject(this);
 
-        if(containerBody.position.x > this._wallLayer!.width){
-            this.setPosition(0, this.y);
+        if (!this.scene.physics.world.bounds.contains(pos.x, pos.y)){
+            return;
         }
         
         if (Math.abs(pos.x - standardPos.x) > 1 || Math.abs(pos.y - standardPos.y) > 1){
@@ -181,6 +227,22 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
             return;
         }
         
+        // fix the ghost position, better view
+        this.setPosition(standardPos.x - GameConfig.TileWidth * 0.5, standardPos.y - GameConfig.TileHeight * 0.5);
+
+        if (this._isAte){
+            const dis = Phaser.Math.Distance.Between(
+                standardPos.x,
+                standardPos.y,
+                GameConfig.GhostOriginX, 
+                GameConfig.GhostOriginX
+            );
+
+            if (dis < 16){
+                this.resetGhostAppearance();
+            }
+        }
+
         let speed = this._aimode.speed;
         let optimismDir = this._aimode.pickDirection();
 
@@ -210,5 +272,69 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
 
         this._currentDirection = optimismDir;
         this._lastOptimismPos = standardPos;
+    }
+    
+    handlePacmanAte(){
+        if (this._isAte){
+            return;
+        }
+
+        this._isAte = true;
+
+        this._ghostBody.setVisible(false);
+        this._ghostEyes.setVisible(true);
+        this._ghostPupils.setVisible(true);
+        this.enableDebugTargetPosition(true);
+
+        this.setAI(new ScatterAI(GameConfig.GhostOriginX, GameConfig.GhostOriginX, this, this._wallLayer!, 100));
+
+        sceneEvents.emit(EVENT_GHOST_ATE);
+    }
+
+    outRoom(){
+        if (this._isFrozen){
+            if(this.x !== GameConfig.GhostOriginX){
+                this.scene.tweens.add({
+                    targets: this,
+                    x: GameConfig.GhostOutX,
+                    duration: 800,
+                    onComplete: () => {
+                        
+                        this.scene.tweens.add({
+                            targets: this,
+                            y: GameConfig.GhostOutY,
+                            duration: 800,
+                            onComplete: () => {
+                                this._isFrozen = false;
+                            },
+                            onCompleteScope: this
+                        });
+
+                    },
+                    onCompleteScope: this
+                });
+            }
+            else{
+                this.scene.tweens.add({
+                    targets: this,
+                    y: GameConfig.GhostOutY,
+                    duration: 800,
+                    onComplete: () => {
+                        this._isFrozen = false;
+                    },
+                    onCompleteScope: this
+                });
+            }
+        }
+    }
+
+    private resetGhostAppearance(){
+        this._isAte = false;
+        
+        this.makeColor(this._ghostColor!);
+        this._ghostBody.setVisible(true);
+        this._ghostBody.play('ghost-move');
+        this._aimode?.changeSpeed(40);
+        sceneEvents.emit(EVENT_PACMAN_HASPOWER);
     }
 }

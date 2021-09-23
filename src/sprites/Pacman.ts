@@ -2,13 +2,15 @@ import Phaser from "phaser";
 import { getPositionOnDirection } from "../interfaces/IGhostAI";
 import { Directions } from "../enums/GameEnums";
 import IPosition from "../interfaces/IPosition";
-import GameConfig from "../configs/GameConfig";
+import { GameConfig } from "../configs/GameConfig";
 
 export default class Pacman extends Phaser.GameObjects.Container{
     private _currentDirection: Directions = Directions.Left;
+    private _nextDirection: Directions = Directions.Left;
     private _wallLayer?: Phaser.Tilemaps.TilemapLayer;
     private _debugPos?: Phaser.GameObjects.Rectangle;
     private _pacman: Phaser.GameObjects.Sprite;
+    private _eatSFXIdx: number = 0;
 
     constructor(scene: Phaser.Scene, x?: number, y?: number, children?: Phaser.GameObjects.GameObject[],
         wallLayer?: Phaser.Tilemaps.TilemapLayer){
@@ -36,6 +38,18 @@ export default class Pacman extends Phaser.GameObjects.Container{
         return this.body as Phaser.Physics.Arcade.Body;
     }
 
+    eatDot(dot: Phaser.GameObjects.Sprite){
+        this.scene.sound.playAudioSprite('sfx', `eat${this._eatSFXIdx}`);
+        this._eatSFXIdx = this._eatSFXIdx === 0 ? 1 : 0;
+        dot.destroy(true);
+    }
+
+    eatBigDot(bigDot: Phaser.GameObjects.Sprite){
+        this.scene.sound.playAudioSprite('sfx', `eat${this._eatSFXIdx}`);
+        this._eatSFXIdx = this._eatSFXIdx === 0 ? 1 : 0;
+        bigDot.destroy(true);
+    }
+
     preUpdate(d: number, dt: number){
         const containerBody = this.physicsBody;
 
@@ -53,31 +67,43 @@ export default class Pacman extends Phaser.GameObjects.Container{
             y: (Math.floor(currPos.y / GameConfig.TileHeight) + 0.5) * GameConfig.TileHeight
         };
 
-        if(containerBody.position.x < 0){
-            this.setPosition(this._wallLayer.width, this.y);
+        // if(containerBody.position.x < 0){
+        //     this.setPosition(this._wallLayer.width, this.y);
+        // }
+
+        // if(containerBody.position.x > this._wallLayer.width){
+        //     this.setPosition(0, this.y);
+        // }
+        
+        this.scene.physics.world.wrapObject(this);
+
+        if (!this.scene.physics.world.bounds.contains(currPos.x, currPos.y)){
+            return;
         }
 
-        if(containerBody.position.x > this._wallLayer.width){
-            this.setPosition(0, this.y);
-        }
-        
         if (Math.abs(currPos.x - standardPos.x) > 1 || Math.abs(currPos.y - standardPos.y) > 1){
             return;
         }
 
-        // fix the pacman position, easier to through the path
-        this.setPosition(standardPos.x - GameConfig.TileWidth * 0.5, standardPos.y - GameConfig.TileHeight * 0.5);
-
         let speed = 50;
         
-        const pos = getPositionOnDirection(currPos.x, currPos.y, this._currentDirection);
+        const pos = getPositionOnDirection(currPos.x, currPos.y, this._nextDirection);
         //this._debugPos?.setPosition(pos.x, pos.y);
                 
         if (this._wallLayer.getTileAtWorldXY(pos.x, pos.y)){
             return;
         }
 
-        switch(this._currentDirection){
+        if (this._currentDirection !== this._nextDirection){
+            // fix the pacman position, easier to through the path
+            this.setPosition(standardPos.x - GameConfig.TileWidth * 0.5, standardPos.y - GameConfig.TileHeight * 0.5);
+        }
+
+        if (this._pacman.anims.isPaused){
+            this._pacman.anims.resume();
+        }
+
+        switch(this._nextDirection){
             case Directions.Left:{
                 containerBody.setVelocity(-speed, 0);
                 this._pacman.scaleX = 1;
@@ -121,6 +147,8 @@ export default class Pacman extends Phaser.GameObjects.Container{
                     break;
                 }
         }
+
+        this._currentDirection = this._nextDirection;
     }
 
     update(cursor: Phaser.Types.Input.Keyboard.CursorKeys){
@@ -131,16 +159,30 @@ export default class Pacman extends Phaser.GameObjects.Container{
         }
 
         if (cursor.left.isDown){
-            this._currentDirection = Directions.Left;
+            this._nextDirection = Directions.Left;
         }
         else if (cursor.right.isDown){
-            this._currentDirection = Directions.Right;
+            this._nextDirection = Directions.Right;
         }
         else if (cursor.up.isDown){
-            this._currentDirection = Directions.Up;
+            this._nextDirection = Directions.Up;
         }
         else if (cursor.down.isDown){
-            this._currentDirection = Directions.Down;
+            this._nextDirection = Directions.Down;
         }
+    }
+
+    destroy(fromScene?: boolean){
+        super.destroy(fromScene);
+    }
+
+    handlePacmanWallsCollision(){
+        if (this._pacman.anims.isPlaying){
+            this._pacman.anims.pause();
+        }
+    }
+
+    handleGhostHited(){
+        //this.destroy(true);
     }
 }
