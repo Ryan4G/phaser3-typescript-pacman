@@ -21,6 +21,8 @@ interface IGhost {
     preUpdate(t: number, dt: number): void;
 
     outRoom(): void;
+    setMovingPause(): void;
+    setGhostFlash(): void;
 };
 
 export{

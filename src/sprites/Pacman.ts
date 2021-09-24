@@ -3,6 +3,8 @@ import { getPositionOnDirection } from "../interfaces/IGhostAI";
 import { Directions } from "../enums/GameEnums";
 import IPosition from "../interfaces/IPosition";
 import { GameConfig } from "../configs/GameConfig";
+import { IGhost } from "../interfaces/IGhost";
+import { EVENT_PACMAN_LOSELIFE, sceneEvents } from "../events/GameEvents";
 
 export default class Pacman extends Phaser.GameObjects.Container{
     private _currentDirection: Directions = Directions.Left;
@@ -11,6 +13,7 @@ export default class Pacman extends Phaser.GameObjects.Container{
     private _debugPos?: Phaser.GameObjects.Rectangle;
     private _pacman: Phaser.GameObjects.Sprite;
     private _eatSFXIdx: number = 0;
+    private _isDead?: boolean;
 
     constructor(scene: Phaser.Scene, x?: number, y?: number, children?: Phaser.GameObjects.GameObject[],
         wallLayer?: Phaser.Tilemaps.TilemapLayer){
@@ -27,6 +30,7 @@ export default class Pacman extends Phaser.GameObjects.Container{
         
         this.physicsBody.setCircle(8);
 
+        this._isDead = false;
         //this._debugPos = scene.add.rectangle(0, 0, 5, 5, 0x000);
     }
 
@@ -81,7 +85,7 @@ export default class Pacman extends Phaser.GameObjects.Container{
             return;
         }
 
-        if (Math.abs(currPos.x - standardPos.x) > 1 || Math.abs(currPos.y - standardPos.y) > 1){
+        if (Math.abs(currPos.x - standardPos.x) > 2 || Math.abs(currPos.y - standardPos.y) > 2){
             return;
         }
 
@@ -183,6 +187,34 @@ export default class Pacman extends Phaser.GameObjects.Container{
     }
 
     handleGhostHited(){
-        //this.destroy(true);
+        if (this._isDead){
+            return;
+        }
+
+        this._isDead = true;
+
+        this.scene.sound.playAudioSprite('sfx', `pacman death`);
+
+        this.scene.tweens.add(
+            {
+                targets: this,
+                alpha: 0,
+				duration: 1600
+            }
+        );
+    }
+
+    canPacmanOverlapGhost(ghost: IGhost): boolean{
+        const dis = Phaser.Math.Distance.Between(
+            this.body.position.x, this.body.position.y,
+            ghost.physicsBody.position.x, ghost.physicsBody.position.y
+        );
+
+        return dis < 4;
+    }
+
+    setMovingPause(){
+        this._pacman.anims.pause();
+        this.physicsBody.setVelocity(0, 0);
     }
 }

@@ -17,10 +17,22 @@ const createGhostsAnims = (anims: Phaser.Animations.AnimationManager) => {
             repeat: -1
         });
 
+    
+    let frightenedFrames = anims.generateFrameNames('pacman', { start: 10, end: 11 });
+    let frightenedFramesWhite = anims.generateFrameNames('pacman', { start: 22, end: 23 });
+
     anims.create(
         {
             key: 'ghost-frightened',
-            frames: anims.generateFrameNames('pacman', { start: 10, end: 11 }),
+            frames: frightenedFrames,
+            frameRate: 10,
+            repeat: -1
+        });
+    
+    anims.create(
+        {
+            key: 'ghost-frightened-flash',
+            frames: [...frightenedFrames, ...frightenedFramesWhite],
             frameRate: 10,
             repeat: -1
         });

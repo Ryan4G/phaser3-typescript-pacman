@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import Phaser, { DOWN } from "phaser";
 import { GameConfig } from "../configs/GameConfig";
 import IPosition from "../interfaces/IPosition";
 import { Colors, Directions } from "../enums/GameEnums";
@@ -6,7 +6,8 @@ import { IGhost } from "../interfaces/IGhost";
 import { getOppositeDirection, IGhostAI } from "../interfaces/IGhostAI";
 import FrightenedAI from "../ai-mode/FrightenedAI";
 import ScatterAI from "../ai-mode/ScatterAI";
-import { EVENT_GHOST_ATE, EVENT_PACMAN_HASPOWER, sceneEvents } from "../events/GameEvents";
+import { EVENT_GHOST_ATE, EVENT_GHOST_REST, EVENT_PACMAN_HASPOWER, sceneEvents } from "../events/GameEvents";
+import RebornAI from "../ai-mode/RebornAI";
 
 export default class Ghost extends Phaser.GameObjects.Container implements IGhost{
     
@@ -22,6 +23,7 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
     private _wallLayer?: Phaser.Tilemaps.TilemapLayer;
     private _isAte?: boolean = false;
     private _isFrozen?: boolean = true;
+    private _tempAiMode?: IGhostAI;
 
     constructor(scene: Phaser.Scene, x?: number, y?: number, children?: Phaser.GameObjects.GameObject[],
         wallLayer?: Phaser.Tilemaps.TilemapLayer){
@@ -72,7 +74,7 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
     }
 
     get isFrightened(){
-        return this._aimode instanceof FrightenedAI;
+        return this._aimode instanceof FrightenedAI || this._aimode instanceof RebornAI;
     }
 
     get isAte(){
@@ -111,23 +113,36 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
 
     setAI(ai: IGhostAI){
 
-        if (this._aimode && ai !== this._aimode){
-            this._currentDirection = getOppositeDirection(this._currentDirection);
+        // the rebornai is playing, but change ai-mode right now, it will store in temp
+        if (this._aimode instanceof RebornAI && this._isAte)
+        {
+            this._tempAiMode = ai;
         }
+        else
+        {
+            // the rebornai instead the normal ai-mode, when rebornai completed, should replace it before
+            if (!(ai instanceof RebornAI) && !(ai instanceof FrightenedAI)){
+                this._tempAiMode = ai;
+            }
 
-        this._aimode = ai;
+            if (this._aimode && ai !== this._aimode){
+                this._currentDirection = getOppositeDirection(this._currentDirection);
+            }
 
-        if (this._aimode instanceof FrightenedAI){
-            this._ghostBody.clearTint();
-            this._ghostEyes.setVisible(false);
-            this._ghostPupils.setVisible(false);
-            this._ghostBody.play('ghost-frightened');
-        }
-        else{
-            this.makeColor(this._ghostColor!);
-            this._ghostEyes.setVisible(true);
-            this._ghostPupils.setVisible(true);
-            this._ghostBody.play('ghost-move');
+            this._aimode = ai;
+
+            if (this._aimode instanceof FrightenedAI){
+                this._ghostBody.clearTint();
+                this._ghostEyes.setVisible(false);
+                this._ghostPupils.setVisible(false);
+                this._ghostBody.play('ghost-frightened');
+            }
+            else{
+                this.makeColor(this._ghostColor!);
+                this._ghostEyes.setVisible(true);
+                this._ghostPupils.setVisible(true);
+                this._ghostBody.play('ghost-move');
+            }
         }
 
         return this;
@@ -141,10 +156,6 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
         switch(color){
             case Colors.Blinky:{
                 this._ghostBody.setTint(0xff0000);
-                // blinky borned out of the ghost room
-                if (this._isFrozen){
-                    this._isFrozen = false;
-                }
                 break;
             }
             case Colors.Clyde:{
@@ -219,7 +230,7 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
             return;
         }
         
-        if (Math.abs(pos.x - standardPos.x) > 1 || Math.abs(pos.y - standardPos.y) > 1){
+        if (Math.abs(pos.x - standardPos.x) > 2 || Math.abs(pos.y - standardPos.y) > 2){
             return;
         }
 
@@ -230,21 +241,16 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
         // fix the ghost position, better view
         this.setPosition(standardPos.x - GameConfig.TileWidth * 0.5, standardPos.y - GameConfig.TileHeight * 0.5);
 
-        if (this._isAte){
-            const dis = Phaser.Math.Distance.Between(
-                standardPos.x,
-                standardPos.y,
-                GameConfig.GhostOriginX, 
-                GameConfig.GhostOriginX
-            );
-
-            if (dis < 16){
-                this.resetGhostAppearance();
-            }
-        }
-
         let speed = this._aimode.speed;
         let optimismDir = this._aimode.pickDirection();
+
+        if (this._isAte && optimismDir == Directions.Idle){            
+            containerBody.setVelocity(0, 0);
+            this._currentDirection = Directions.Up;
+            this._lastOptimismPos = standardPos;
+            this.resetGhostAppearance();
+            return;
+        }
 
         this.look(optimismDir);
 
@@ -266,6 +272,7 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
                 break;
             }
             default:{
+                containerBody.setVelocity(0, 0);
                 break;
             }
         }
@@ -279,20 +286,40 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
             return;
         }
 
+        this.scene.sound.playAudioSprite('sfx', `ghost ate`);
+
         this._isAte = true;
 
         this._ghostBody.setVisible(false);
-        this._ghostEyes.setVisible(true);
-        this._ghostPupils.setVisible(true);
-        this.enableDebugTargetPosition(true);
 
-        this.setAI(new ScatterAI(GameConfig.GhostOriginX, GameConfig.GhostOriginX, this, this._wallLayer!, 100));
+        this._isFrozen = true;
+        
+        this.scene.time.delayedCall(
+            300,
+            () => {
+                this._isFrozen = false;
+        
+                this.setAI(new RebornAI(this, this._wallLayer!));
 
-        sceneEvents.emit(EVENT_GHOST_ATE);
+                sceneEvents.emit(EVENT_GHOST_ATE);
+            }
+        )
     }
 
     outRoom(){
         if (this._isFrozen){
+
+            //console.log(this.ghostColor, this._aimode, this._tempAiMode);
+
+            if (this._aimode instanceof RebornAI && this._tempAiMode){
+                this.setAI(this._tempAiMode);
+            }
+
+            if (this.x === GameConfig.GhostOutX && this.y === GameConfig.GhostOutY){
+                this._isFrozen = false;
+                return;
+            }
+            
             if(this.x !== GameConfig.GhostOriginX){
                 this.scene.tweens.add({
                     targets: this,
@@ -320,6 +347,7 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
                     y: GameConfig.GhostOutY,
                     duration: 800,
                     onComplete: () => {
+
                         this._isFrozen = false;
                     },
                     onCompleteScope: this
@@ -328,13 +356,36 @@ export default class Ghost extends Phaser.GameObjects.Container implements IGhos
         }
     }
 
+    setMovingPause(){
+        this._isFrozen = true;
+        this._ghostBody.anims.pause();
+        this.physicsBody.setVelocity(0, 0);
+    }
+    
+    setGhostFlash(){
+        if (this.isFrightened){
+            this._ghostBody.play('ghost-frightened-flash');
+        }
+    }
+
     private resetGhostAppearance(){
         this._isAte = false;
+        this._isFrozen = true;
         
         this.makeColor(this._ghostColor!);
         this._ghostBody.setVisible(true);
         this._ghostBody.play('ghost-move');
-        this._aimode?.changeSpeed(40);
-        sceneEvents.emit(EVENT_PACMAN_HASPOWER);
+            
+        if (this._tempAiMode){
+            this.setAI(this._tempAiMode);
+        }   
+
+        //console.log(this.ghostColor, 'resetGhost', this._isFrozen);
+
+        sceneEvents.emit(EVENT_GHOST_REST);
+
+        this.scene.time.delayedCall(500, ()=>{
+            this.outRoom();         
+        });
     }
 }

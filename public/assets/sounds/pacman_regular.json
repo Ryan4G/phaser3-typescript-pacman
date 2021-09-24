@@ -9,8 +9,8 @@
       "loop": false
     },
     "pacman death": {
-      "start": 2.5,
-      "end": 4.5,
+      "start": 2.55,
+      "end": 4.15,
       "loop": false
     },
     "eat0": {
@@ -28,7 +28,7 @@
       "end": 7.8,
       "loop": false
     },
-    "level up": {
+    "ghost ate": {
       "start": 8.5,
       "end": 9.5,
       "loop": false
@@ -38,7 +38,7 @@
       "end": 12.5,
       "loop": false
     },
-    "ghost ate": {
+    "ghost ate2": {
       "start": 13.2,
       "end": 13.8,
       "loop": false
