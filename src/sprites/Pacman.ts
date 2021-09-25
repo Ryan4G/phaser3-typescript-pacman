@@ -5,6 +5,7 @@ import IPosition from "../interfaces/IPosition";
 import { GameConfig } from "../configs/GameConfig";
 import { IGhost } from "../interfaces/IGhost";
 import { EVENT_PACMAN_LOSELIFE, sceneEvents } from "../events/GameEvents";
+import IDirections from "~interfaces/IDirections";
 
 export default class Pacman extends Phaser.GameObjects.Container{
     private _currentDirection: Directions = Directions.Left;
@@ -155,23 +156,23 @@ export default class Pacman extends Phaser.GameObjects.Container{
         this._currentDirection = this._nextDirection;
     }
 
-    update(cursor: Phaser.Types.Input.Keyboard.CursorKeys){
+    update(dir: IDirections){
         const containerBody = this.physicsBody;
 
         if (!containerBody || !this._wallLayer){
             return;
         }
 
-        if (cursor.left.isDown){
+        if (dir.left){
             this._nextDirection = Directions.Left;
         }
-        else if (cursor.right.isDown){
+        else if (dir.right){
             this._nextDirection = Directions.Right;
         }
-        else if (cursor.up.isDown){
+        else if (dir.up){
             this._nextDirection = Directions.Up;
         }
-        else if (cursor.down.isDown){
+        else if (dir.down){
             this._nextDirection = Directions.Down;
         }
     }

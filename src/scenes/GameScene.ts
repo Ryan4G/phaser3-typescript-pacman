@@ -21,6 +21,7 @@ import {
 } from '../events/GameEvents';
 import { IGhostAIMap } from '../interfaces/IGhostAIMap';
 import ILevelInfo from '../interfaces/ILevelInfo';
+import IDirections from '~interfaces/IDirections';
 
 export default class GameScene extends Phaser.Scene {
 
@@ -46,6 +47,7 @@ export default class GameScene extends Phaser.Scene {
     private _levels: number = 1;
 
     private _ghostValue: number = 100;
+    private _externalDirections?: IDirections;
 
     constructor() {
         super('GameScene');
@@ -61,6 +63,13 @@ export default class GameScene extends Phaser.Scene {
         this._dotsArray = new Array<Phaser.GameObjects.Sprite>();
         this._bigDotsArray = new Array<Phaser.GameObjects.Sprite>();
         this._ghostValue = 100;
+
+        this._externalDirections = {
+            left: false,
+            right: false,
+            up: false,
+            down: false
+        };
     }
 
     create(levelInfo?: ILevelInfo)
@@ -276,7 +285,8 @@ export default class GameScene extends Phaser.Scene {
             this.updateGameScore(0);
         });
 
-        this.cameras.main.setViewport(0, 0, this.wallLayer.width, this.wallLayer.height);
+        const camera = this.cameras.main;
+        camera.setViewport(0, 0, this.wallLayer.width, this.wallLayer.height);
         
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             sceneEvents.off(EVENT_GAME_INITED);
@@ -291,7 +301,22 @@ export default class GameScene extends Phaser.Scene {
             return;
         }
 
-        this.pacman.update(this.cursor);
+        let cusorDirections: IDirections = {
+            left: this.cursor.left.isDown,
+            right: this.cursor.right.isDown,
+            up: this.cursor.up.isDown,
+            down: this.cursor.down.isDown
+        };
+
+        if (!(cusorDirections.left || cusorDirections.right || cusorDirections.up || cusorDirections.down) && this._externalDirections){
+            cusorDirections = this._externalDirections;
+        }
+
+        this.pacman.update(cusorDirections);
+    }
+
+    setExternalDirections(dir: IDirections){
+        this._externalDirections = dir;
     }
 
     private createGhostAITimer(){

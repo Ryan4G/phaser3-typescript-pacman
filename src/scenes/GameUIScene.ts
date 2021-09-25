@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameConfig } from '~configs/GameConfig';
+import GamePad from '../tools/GamePad';
 import { 
     EVENT_GAME_INITED, 
     EVENT_PACMAN_HASPOWER,
@@ -13,6 +14,7 @@ import {
     EVENT_GAME_OVER,
     EVENT_GAME_UPDATESCORE
 } from '../events/GameEvents';
+import GameScene from './GameScene';
 
 export default class GameUIScene extends Phaser.Scene {
 
@@ -22,6 +24,8 @@ export default class GameUIScene extends Phaser.Scene {
     private _lives?:number = 3;
     private _scores?:number = 0;
     private _levels?: number = 1;
+    private _gamePad?: GamePad;
+    private _gameScene?: GameScene;
 
     constructor() {
         super('GameUIScene');
@@ -148,6 +152,16 @@ export default class GameUIScene extends Phaser.Scene {
             sceneEvents.off(EVENT_GAME_OVER);
             sceneEvents.off(EVENT_GAME_UPDATESCORE);
         }); 
+
+        this._gamePad = new GamePad(
+            this, 
+            this.scale.width - 72,
+            this.scale.height - 80,
+            undefined, 24, 18);
+        
+        this.add.existing(this._gamePad);
+
+        this._gameScene = this.scene.get('GameScene') as GameScene;
     }
 
     update() {
@@ -162,6 +176,10 @@ export default class GameUIScene extends Phaser.Scene {
             Levels: \n
             ${this._levels} \n\n 
             `
-        )
+        );
+
+        if (this._gameScene && this._gamePad){
+            this._gameScene.setExternalDirections(this._gamePad.currentDirections);
+        }
     }
 }
